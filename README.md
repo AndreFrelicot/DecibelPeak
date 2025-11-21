@@ -18,6 +18,18 @@
 
 **DecibelPeak** is a sophisticated iOS application for monitoring and analyzing sound levels in real-time. Whether you're an audio professional, researcher, or just curious about your acoustic environment, DecibelPeak provides accurate decibel measurements with beautiful, intuitive visualizations.
 
+## 🎥 Demo Video
+
+<p align="center">
+  <video src="https://github.com/AndreFrelicot/DecibelPeak/raw/main/.github/DecibelPeak-886-1920-60fps.mov" width="300" controls>
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+<p align="center">
+  <em>Watch DecibelPeak in action - Real-time monitoring with multiple visualization modes</em>
+</p>
+
 ## ✨ Features
 
 ### 🎯 Core Functionality

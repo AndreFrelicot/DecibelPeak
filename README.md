@@ -12,6 +12,12 @@
   Real-time decibel measurements • Frequency spectrum analysis • Multiple visualization modes
 </p>
 
+<p align="center">
+  <a href="https://apps.apple.com/us/app/decibelpeak/id6752702602">
+    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&amp;releaseDate=1234567890" alt="Download on the App Store" style="border-radius: 13px; width: 250px; height: 83px;">
+  </a>
+</p>
+
 ---
 
 ## 📱 About
@@ -106,13 +112,25 @@ private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
 
 ## 🚀 Getting Started
 
-### Requirements
+### Download from App Store
+
+The easiest way to get DecibelPeak is from the App Store:
+
+**[📲 Download on the App Store](https://apps.apple.com/us/app/decibelpeak/id6752702602)**
+
+**Requirements:**
+- iOS 17.0 or later
+- Microphone access permission
+
+### Build from Source (For Developers)
+
+**Requirements:**
 - iOS 17.0 or later
 - Xcode 16.4 or later
 - Swift 5.0 or later
-- Microphone access permission
+- Apple Developer Account (for device deployment)
 
-### Installation
+**Installation:**
 
 1. Clone the repository:
 ```bash

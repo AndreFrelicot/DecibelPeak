@@ -21,13 +21,14 @@
 ## 🎥 Demo Video
 
 <p align="center">
-  <video src="https://github.com/AndreFrelicot/DecibelPeak/raw/main/.github/DecibelPeak-886-1920-60fps.mov" width="300" controls>
-    Your browser does not support the video tag.
-  </video>
+  <a href=".github/DecibelPeak-886-1920-60fps.mov">
+    <img src=".github/decibelpeak-ss-01.png" width="250" alt="Watch Demo Video"/>
+  </a>
 </p>
 
 <p align="center">
-  <em>Watch DecibelPeak in action - Real-time monitoring with multiple visualization modes</em>
+  <strong>👆 Click image above to download and watch the demo video (28MB, 60fps)</strong><br/>
+  <em>See DecibelPeak in action with real-time monitoring and multiple visualization modes</em>
 </p>
 
 ## ✨ Features

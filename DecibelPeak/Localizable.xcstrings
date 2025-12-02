@@ -10,6 +10,9 @@
     "%lld dB" : {
 
     },
+    "+%lld dB" : {
+
+    },
     "audio_analysis" : {
       "comment" : "Title for audio analysis section",
       "extractionState" : "manual",
@@ -51,6 +54,9 @@
           }
         }
       }
+    },
+    "Calibration" : {
+
     },
     "Cancel" : {
 

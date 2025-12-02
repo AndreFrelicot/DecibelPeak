@@ -85,9 +85,9 @@
 		65F30D4C2E74501400641BF1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				65F30D4B2E74501400641BF1 /* DbMeter.app */,
-				65F30D582E74501600641BF1 /* DbMeterTests.xctest */,
-				65F30D622E74501600641BF1 /* DbMeterUITests.xctest */,
+				65F30D4B2E74501400641BF1 /* DecibelPeak.app */,
+				65F30D582E74501600641BF1 /* DecibelPeakTests.xctest */,
+				65F30D622E74501600641BF1 /* DecibelPeakUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -97,7 +97,7 @@
 /* Begin PBXNativeTarget section */
 		65F30D4A2E74501400641BF1 /* DecibelPeak */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 65F30D6C2E74501600641BF1 /* Build configuration list for PBXNativeTarget "DbMeter" */;
+			buildConfigurationList = 65F30D6C2E74501600641BF1 /* Build configuration list for PBXNativeTarget "DecibelPeak" */;
 			buildPhases = (
 				65F30D472E74501400641BF1 /* Sources */,
 				65F30D482E74501400641BF1 /* Frameworks */,
@@ -114,12 +114,12 @@
 			packageProductDependencies = (
 			);
 			productName = DecibelPeak;
-			productReference = 65F30D4B2E74501400641BF1 /* DbMeter.app */;
+			productReference = 65F30D4B2E74501400641BF1 /* DecibelPeak.app */;
 			productType = "com.apple.product-type.application";
 		};
 		65F30D572E74501600641BF1 /* DecibelPeakTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 65F30D6F2E74501600641BF1 /* Build configuration list for PBXNativeTarget "DbMeterTests" */;
+			buildConfigurationList = 65F30D6F2E74501600641BF1 /* Build configuration list for PBXNativeTarget "DecibelPeakTests" */;
 			buildPhases = (
 				65F30D542E74501600641BF1 /* Sources */,
 				65F30D552E74501600641BF1 /* Frameworks */,
@@ -137,12 +137,12 @@
 			packageProductDependencies = (
 			);
 			productName = DecibelPeakTests;
-			productReference = 65F30D582E74501600641BF1 /* DbMeterTests.xctest */;
+			productReference = 65F30D582E74501600641BF1 /* DecibelPeakTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		65F30D612E74501600641BF1 /* DecibelPeakUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 65F30D722E74501600641BF1 /* Build configuration list for PBXNativeTarget "DbMeterUITests" */;
+			buildConfigurationList = 65F30D722E74501600641BF1 /* Build configuration list for PBXNativeTarget "DecibelPeakUITests" */;
 			buildPhases = (
 				65F30D5E2E74501600641BF1 /* Sources */,
 				65F30D5F2E74501600641BF1 /* Frameworks */,
@@ -160,7 +160,7 @@
 			packageProductDependencies = (
 			);
 			productName = DecibelPeakUITests;
-			productReference = 65F30D622E74501600641BF1 /* DbMeterUITests.xctest */;
+			productReference = 65F30D622E74501600641BF1 /* DecibelPeakUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 65F30D462E74501400641BF1 /* Build configuration list for PBXProject "DbMeter" */;
+			buildConfigurationList = 65F30D462E74501400641BF1 /* Build configuration list for PBXProject "DecibelPeak" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (

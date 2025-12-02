@@ -234,12 +234,20 @@ struct ContentView: View {
                             }
                             .padding(.top, 20)
 
-                            WaveformCarouselView(
-                                samples: audioManager.waveformSamples,
-                                frequencyBands: audioManager.frequencyBands,
-                                isRecording: audioManager.isRecording,
-                                audioManager: audioManager
-                            )
+                            // Visualization with calibration overlay
+                            ZStack {
+                                WaveformCarouselView(
+                                    samples: audioManager.waveformSamples,
+                                    frequencyBands: audioManager.frequencyBands,
+                                    isRecording: audioManager.isRecording,
+                                    audioManager: audioManager
+                                )
+
+                                // Calibration overlay on top of visualization
+                                if audioManager.showCalibrationOverlay {
+                                    CalibrationOverlayView(audioManager: audioManager)
+                                }
+                            }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(.horizontal, 20)
                         }
@@ -248,7 +256,19 @@ struct ContentView: View {
                         VStack {
                             Spacer()
                             HStack {
-                                // dB value at bottom left
+                                // Calibration button at bottom left
+                                Button(action: {
+                                    audioManager.showCalibration()
+                                }) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color.white.opacity(0.15)))
+                                }
+                                .padding(.leading, 36)
+
+                                // dB value
                                 HStack(alignment: .bottom, spacing: 8) {
                                     if audioManager.isRecording && audioManager.decibelLevel > 0 {
                                         Text(String(format: "%.0f", audioManager.decibelLevel))
@@ -309,29 +329,38 @@ struct ContentView: View {
                 } else {
 
                     let config = ScreenSizeConfiguration.getLayoutConfig(for: geometry)
-                    
+
                     // Vertical Layout (existing)
-                    ScrollView {
-                        VStack(spacing: 10) {
-                            VStack(spacing: 8) {
-                                Text(LocalizedStringKey("decibel_peak"))
-                                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
+                    ZStack {
+                        ScrollView {
+                            VStack(spacing: 10) {
+                                VStack(spacing: 8) {
+                                    Text(LocalizedStringKey("decibel_peak"))
+                                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
 
-                                Text(LocalizedStringKey("sound_level_monitor"))
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.top, 20)
+                                    Text(LocalizedStringKey("sound_level_monitor"))
+                                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.top, 20)
 
-                            WaveformCarouselView(
-                                samples: audioManager.waveformSamples,
-                                frequencyBands: audioManager.frequencyBands,
-                                isRecording: audioManager.isRecording,
-                                audioManager: audioManager
-                            )
-                            .frame(height: config.visualizationSize)
-                            .padding(.horizontal, 20)
+                                // Visualization with calibration overlay
+                                ZStack {
+                                    WaveformCarouselView(
+                                        samples: audioManager.waveformSamples,
+                                        frequencyBands: audioManager.frequencyBands,
+                                        isRecording: audioManager.isRecording,
+                                        audioManager: audioManager
+                                    )
+
+                                    // Calibration overlay on top of visualization
+                                    if audioManager.showCalibrationOverlay {
+                                        CalibrationOverlayView(audioManager: audioManager)
+                                    }
+                                }
+                                .frame(height: config.visualizationSize)
+                                .padding(.horizontal, 20)
 
                             
                             let gaugeSize = (geometry.size.width - 40) * config.gaugeSizePercent
@@ -406,6 +435,27 @@ struct ContentView: View {
                     }
                     .scrollDisabled(true)
                     .scrollBounceBehavior(.basedOnSize)
+
+                        // Calibration button at bottom left (portrait)
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Button(action: {
+                                    audioManager.showCalibration()
+                                }) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color.white.opacity(0.15)))
+                                }
+                                .padding(.leading, 16)
+                                .padding(.bottom, 24)
+
+                                Spacer()
+                            }
+                        }
+                    }
                 }
             }
         }

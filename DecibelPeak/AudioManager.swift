@@ -7,6 +7,8 @@
 
 import AVFoundation
 import SwiftUI
+import UIKit
+import AudioToolbox
 
 struct TimestampedDbValue {
     let value: Double
@@ -24,6 +26,19 @@ class AudioManager: NSObject, ObservableObject {
     @Published var selectedVisualization: Int = 0
     @Published var dbHistory: [Double] = []
     @Published var timestampedDbHistory: [TimestampedDbValue] = []
+
+    // Calibration settings
+    @Published var calibrationOffset: Double = 0.0
+    @Published var showCalibrationOverlay: Bool = false
+    @Published var tempCalibrationOffset: Double = 0.0
+
+    // Calibration constants
+    static let minCalibrationOffset: Double = -20.0
+    static let maxCalibrationOffset: Double = 20.0
+    static let calibrationStep: Double = 0.5
+
+    private static let calibrationKey = "calibrationOffset"
+
     private var waterfallBuffer: [[Float]] = []
     private var waterfallWriteIndex = 0
     private var waterfallUpdateCounter = 0
@@ -47,7 +62,53 @@ class AudioManager: NSObject, ObservableObject {
         waterfallData = Array(repeating: Array(repeating: 0.0, count: 64), count: maxWaterfallRows)
         // Initialize dbHistory with 100 points (matches maxHistoryPoints in DbCurveView)
         dbHistory = Array(repeating: 0.0, count: 100)
+        // Load saved calibration offset
+        calibrationOffset = UserDefaults.standard.double(forKey: AudioManager.calibrationKey)
         requestPermission()
+    }
+
+    // MARK: - Calibration Methods
+
+    func showCalibration() {
+        tempCalibrationOffset = calibrationOffset
+        showCalibrationOverlay = true
+    }
+
+    func hideCalibration() {
+        showCalibrationOverlay = false
+    }
+
+    func setTempCalibrationOffset(_ offset: Double) {
+        // Round to nearest step
+        var rounded = (offset / AudioManager.calibrationStep).rounded() * AudioManager.calibrationStep
+
+        // Snap to 0 when entering the -0.5 to +0.5 range
+        let wasNotZero = tempCalibrationOffset != 0.0
+        if rounded > -0.5 && rounded < 0.5 {
+            rounded = 0.0
+        }
+
+        let newValue = rounded.clamped(to: AudioManager.minCalibrationOffset...AudioManager.maxCalibrationOffset)
+
+        // Play haptic feedback when snapping to 0
+        if wasNotZero && newValue == 0.0 {
+            // Use AudioServicesPlaySystemSound for reliable haptic feedback
+            // 1519 = "Peek" haptic (gentle tap)
+            AudioServicesPlaySystemSound(1519)
+        }
+
+        tempCalibrationOffset = newValue
+    }
+
+    func saveCalibration() {
+        calibrationOffset = tempCalibrationOffset
+        UserDefaults.standard.set(calibrationOffset, forKey: AudioManager.calibrationKey)
+        showCalibrationOverlay = false
+    }
+
+    func cancelCalibration() {
+        tempCalibrationOffset = calibrationOffset
+        showCalibrationOverlay = false
     }
     
     func requestPermission() {
@@ -67,7 +128,10 @@ class AudioManager: NSObject, ObservableObject {
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement)
+        // Use .playAndRecord to allow system sounds (haptics) while recording
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers])
+        // Allow haptic feedback during audio recording (iOS 13+)
+        try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try session.setPreferredSampleRate(44100.0)
         try session.setPreferredIOBufferDuration(0.005)
         try session.setActive(true)
@@ -156,7 +220,9 @@ class AudioManager: NSObject, ObservableObject {
         // Calculate RMS for decibel level
         let rms = sqrt(channelDataArray.map { $0 * $0 }.reduce(0, +) / Float(channelDataArray.count))
         let avgPower = 20 * log10(max(0.00001, rms))
-        let calibratedDb = avgPower + 100
+        // Base calibration (100) + user calibration offset (use temp offset for live preview)
+        let activeOffset = showCalibrationOverlay ? tempCalibrationOffset : calibrationOffset
+        let calibratedDb = avgPower + 100 + Float(activeOffset)
         currentDb = currentDb * 0.8 + calibratedDb * 0.2
         //currentDb = Float.random(in: 90...140)
         
@@ -275,5 +341,13 @@ class AudioManager: NSObject, ObservableObject {
 
     deinit {
         stopMonitoring()
+    }
+}
+
+// MARK: - Comparable Extension
+
+extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        return min(max(self, range.lowerBound), range.upperBound)
     }
 }

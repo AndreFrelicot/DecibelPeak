@@ -407,6 +407,28 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .topTrailing) {
+            // Rotation toggle button
+            Button(action: {
+                // Use screen bounds to reliably detect current orientation
+                let screenBounds = UIScreen.main.bounds
+                let isCurrentlyLandscape = screenBounds.width > screenBounds.height
+                let targetOrientation: UIInterfaceOrientation = isCurrentlyLandscape ? .portrait : .landscapeRight
+
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                    windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: targetOrientation == .portrait ? .portrait : .landscapeRight))
+                }
+                UIDevice.current.setValue(targetOrientation.rawValue, forKey: "orientation")
+            }) {
+                Image(systemName: "rotate.right")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.15)))
+            }
+            .padding(.top, 16)
+            .padding(.trailing, 16)
+        }
         .alert("Microphone Permission Required", isPresented: $showingPermissionAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Open Settings") {

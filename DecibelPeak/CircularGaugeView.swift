@@ -23,11 +23,13 @@ struct CircularGaugeView: View {
     
     private var decibelColor: Color {
         switch value {
-        case 0..<60:
+        case 0..<40:
+            return Color(red: 0, green: 0.478, blue: 1) // iOS system blue (0xFF007AFF)
+        case 40..<60:
             return .green
-        case 60..<85:
+        case 60..<80:
             return .yellow
-        case 85..<100:
+        case 80..<100:
             return .orange
         default:
             return .red
@@ -51,6 +53,7 @@ struct CircularGaugeView: View {
                     .stroke(
                         AngularGradient(
                             gradient: Gradient(colors: [
+                                Color(red: 0, green: 0.478, blue: 1).opacity(0.3), // Blue
                                 .green.opacity(0.3),
                                 .yellow.opacity(0.3),
                                 .orange.opacity(0.3),

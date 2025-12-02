@@ -193,11 +193,13 @@ struct ContentView: View {
 
     private func decibelColor(for value: Double) -> Color {
         switch value {
-        case 0..<60:
+        case 0..<40:
+            return Color(red: 0, green: 0.478, blue: 1) // iOS system blue (0xFF007AFF)
+        case 40..<60:
             return .green
-        case 60..<85:
+        case 60..<80:
             return .yellow
-        case 85..<100:
+        case 80..<100:
             return .orange
         default:
             return .red

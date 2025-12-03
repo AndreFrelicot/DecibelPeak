@@ -263,7 +263,7 @@ struct ContentView: View {
                             .padding(.horizontal, 20)
                         }
 
-                        // Monitoring button at bottom right
+                        // Monitoring button at bottom right (hidden when calibration overlay is shown)
                         VStack {
                             Spacer()
                             HStack {
@@ -295,6 +295,8 @@ struct ContentView: View {
                                         .shadow(color: audioManager.isRecording ? .red.opacity(0.4) : .blue.opacity(0.4), radius: 10, y: 5)
                                 }
                                 .padding(.trailing, 30)
+                                .opacity(audioManager.showCalibrationOverlay ? 0 : 1)
+                                .animation(.easeInOut(duration: 0.3), value: audioManager.showCalibrationOverlay)
                             }
                             .padding(.bottom, 30)
                         }

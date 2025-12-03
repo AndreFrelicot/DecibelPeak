@@ -223,14 +223,25 @@ struct ContentView: View {
                     // Horizontal Layout
                     ZStack {
                         VStack(spacing: 16) {
-                            VStack(spacing: 8) {
-                                Text(LocalizedStringKey("audio_analysis"))
-                                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
+                            // dB value at top center
+                            HStack(alignment: .bottom, spacing: 8) {
+                                if audioManager.isRecording && audioManager.decibelLevel > 0 {
+                                    Text(String(format: "%.0f", audioManager.decibelLevel))
+                                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                                        .foregroundColor(decibelColor(for: audioManager.decibelLevel))
+                                        .contentTransition(.numericText())
+                                        .animation(.easeInOut(duration: 0.2), value: audioManager.decibelLevel)
+                                } else {
+                                    Text("–")
+                                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                                        .foregroundColor(.gray.opacity(0.5))
+                                        .animation(.easeInOut(duration: 0.3), value: audioManager.isRecording)
+                                }
 
-                                Text(LocalizedStringKey("real_time_frequency_spectrum"))
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                                    .foregroundColor(.gray)
+                                Text(LocalizedStringKey("db_unit"))
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(audioManager.isRecording ? .gray : .gray.opacity(0.5))
+                                    .animation(.easeInOut(duration: 0.3), value: audioManager.isRecording)
                             }
                             .padding(.top, 20)
 
@@ -252,37 +263,11 @@ struct ContentView: View {
                             .padding(.horizontal, 20)
                         }
 
-                        // Floating elements at bottom
+                        // Monitoring button at bottom right
                         VStack {
                             Spacer()
                             HStack {
-                                // dB value
-                                HStack(alignment: .bottom, spacing: 8) {
-                                    if audioManager.isRecording && audioManager.decibelLevel > 0 {
-                                        Text(String(format: "%.0f", audioManager.decibelLevel))
-                                            .font(.system(size: 48, weight: .bold, design: .rounded))
-                                            .foregroundColor(decibelColor(for: audioManager.decibelLevel))
-                                            .contentTransition(.numericText())
-                                            .animation(.easeInOut(duration: 0.2), value: audioManager.decibelLevel)
-                                            .frame(width: 120, alignment: .trailing)
-                                    } else {
-                                        Text("–")
-                                            .font(.system(size: 48, weight: .bold, design: .rounded))
-                                            .foregroundColor(.gray.opacity(0.5))
-                                            .animation(.easeInOut(duration: 0.3), value: audioManager.isRecording)
-                                            .frame(width: 120, alignment: .trailing)
-                                    }
-
-                                    Text(LocalizedStringKey("db_unit"))
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                        .foregroundColor(audioManager.isRecording ? .gray : .gray.opacity(0.5))
-                                        .animation(.easeInOut(duration: 0.3), value: audioManager.isRecording)
-                                }
-                                .padding(.leading, 5)
-
                                 Spacer()
-
-                                // Monitoring button at bottom right
                                 Button(action: {
                                     if audioManager.isRecording {
                                         audioManager.stopMonitoring()

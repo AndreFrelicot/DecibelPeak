@@ -252,22 +252,10 @@ struct ContentView: View {
                             .padding(.horizontal, 20)
                         }
 
-                        // Floating elements
+                        // Floating elements at bottom
                         VStack {
                             Spacer()
                             HStack {
-                                // Calibration button at bottom left
-                                Button(action: {
-                                    audioManager.showCalibration()
-                                }) {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.8))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color.white.opacity(0.15)))
-                                }
-                                .padding(.leading, 36)
-
                                 // dB value
                                 HStack(alignment: .bottom, spacing: 8) {
                                     if audioManager.isRecording && audioManager.decibelLevel > 0 {
@@ -435,29 +423,23 @@ struct ContentView: View {
                     }
                     .scrollDisabled(true)
                     .scrollBounceBehavior(.basedOnSize)
-
-                        // Calibration button at bottom left (portrait)
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Button(action: {
-                                    audioManager.showCalibration()
-                                }) {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.8))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color.white.opacity(0.15)))
-                                }
-                                .padding(.leading, 16)
-                                .padding(.bottom, 24)
-
-                                Spacer()
-                            }
-                        }
-                    }
                 }
             }
+        }
+        }
+        .overlay(alignment: .topLeading) {
+            // Calibration button at top left (portrait)
+            Button(action: {
+                audioManager.showCalibration()
+            }) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.15)))
+            }
+            .padding(.top, 16)
+            .padding(.leading, 16)
         }
         .overlay(alignment: .topTrailing) {
             // Rotation toggle button

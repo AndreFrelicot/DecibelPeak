@@ -16,6 +16,11 @@ struct TimestampedDbValue {
     let appearanceTime: TimeInterval // When the data should start appearing visually
 }
 
+struct DbPeakDataPoint {
+    let value: Double
+    let time: Date
+}
+
 class AudioManager: NSObject, ObservableObject {
     @Published var decibelLevel: Double = 50.0
     @Published var isRecording: Bool = false
@@ -26,6 +31,9 @@ class AudioManager: NSObject, ObservableObject {
     @Published var selectedVisualization: Int = 0
     @Published var dbHistory: [Double] = []
     @Published var timestampedDbHistory: [TimestampedDbValue] = []
+    @Published var dbPeakData: [DbPeakDataPoint] = []
+    @Published var dbPeakValue: Double = 0.0
+    @Published var dbPeakTime: Date = Date()
 
     // Calibration settings
     @Published var calibrationOffset: Double = 0.0
@@ -53,6 +61,10 @@ class AudioManager: NSObject, ObservableObject {
     private let maxSamples = 100
     private let maxWaterfallRows = 80
     private let fftAnalyzer = FFTAnalyzer(fftSize: 1024)
+    private var peakBuffer: [DbPeakDataPoint] = []
+    private var sessionPeakDb: Double = 0.0
+    private var sessionPeakTime: Date = Date()
+    private var frozenPeakSnapshot: [DbPeakDataPoint]? = nil
     
     override init() {
         super.init()
@@ -200,6 +212,13 @@ class AudioManager: NSObject, ObservableObject {
             self.sampleBuffer = Array(repeating: 0.0, count: self.maxSamples)
             self.dbHistory = Array(repeating: 0.0, count: 100)
             self.timestampedDbHistory = []
+            self.peakBuffer = []
+            self.sessionPeakDb = 0.0
+            self.sessionPeakTime = Date()
+            self.frozenPeakSnapshot = nil
+            self.dbPeakData = []
+            self.dbPeakValue = 0.0
+            self.dbPeakTime = Date()
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -322,6 +341,41 @@ class AudioManager: NSObject, ObservableObject {
 
         // Cull old timestamped data points that are no longer visible
         cullInvisibleDataPoints(currentTime: currentTime)
+
+        // Peak tracking for dB Peak view
+        let now = Date()
+        let peakPoint = DbPeakDataPoint(value: decibelLevel, time: now)
+        peakBuffer.append(peakPoint)
+
+        // Trim rolling buffer to last 65 seconds (enough for 30s before + 30s after peak)
+        let bufferCutoff = now.addingTimeInterval(-65)
+        peakBuffer.removeAll { $0.time < bufferCutoff }
+
+        // Check for new peak
+        if decibelLevel > sessionPeakDb {
+            sessionPeakDb = decibelLevel
+            sessionPeakTime = now
+            frozenPeakSnapshot = nil  // new peak found, unfreeze to capture new window
+        }
+
+        // Freeze snapshot once we have 30 seconds of data after the peak
+        let timeSincePeak = now.timeIntervalSince(sessionPeakTime)
+        if frozenPeakSnapshot == nil && timeSincePeak >= 30.0 {
+            let windowStart = sessionPeakTime.addingTimeInterval(-30)
+            let windowEnd = sessionPeakTime.addingTimeInterval(30)
+            frozenPeakSnapshot = peakBuffer.filter { $0.time >= windowStart && $0.time <= windowEnd }
+        }
+
+        // Publish: use frozen snapshot if available, otherwise show live data
+        if let frozen = frozenPeakSnapshot {
+            dbPeakData = frozen
+        } else {
+            let windowStart = sessionPeakTime.addingTimeInterval(-30)
+            let windowEnd = sessionPeakTime.addingTimeInterval(30)
+            dbPeakData = peakBuffer.filter { $0.time >= windowStart && $0.time <= windowEnd }
+        }
+        dbPeakValue = sessionPeakDb
+        dbPeakTime = sessionPeakTime
     }
 
     private func cullInvisibleDataPoints(currentTime: TimeInterval) {

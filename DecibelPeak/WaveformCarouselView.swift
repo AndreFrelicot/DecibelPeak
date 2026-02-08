@@ -14,7 +14,7 @@ struct WaveformCarouselView: View {
     @ObservedObject var audioManager: AudioManager
     @State private var autoScroll = true
     
-    private let visualizations = ["viz_wave", "viz_spectrum", "viz_fft_bars", "viz_fft_circle", "viz_waterfall", "viz_db_curve"]
+    private let visualizations = ["viz_wave", "viz_spectrum", "viz_fft_bars", "viz_fft_circle", "viz_waterfall", "viz_db_curve", "viz_db_peak"]
     
     var body: some View {
         VStack(spacing: 12) {
@@ -95,6 +95,10 @@ struct WaveformCarouselView: View {
                         DbCurveView(audioManager: audioManager)
                             .padding()
                             .tag(5)
+
+                        DbPeakView(audioManager: audioManager)
+                            .padding()
+                            .tag(6)
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                     .animation(.easeInOut(duration: 0.3), value: audioManager.selectedVisualization)

@@ -346,3 +346,217 @@ struct DbCurveView: View {
         }
     }
 }
+
+struct DbPeakView: View {
+    @ObservedObject var audioManager: AudioManager
+    @State private var scrollTimeOffset: CGFloat? = nil  // nil = auto-center on peak
+    @State private var isDragging = false
+    @State private var dragStartOffset: CGFloat = 0
+
+    private let visibleTimeWindow: CGFloat = 15.0  // 15 seconds visible at a time
+    private let timeLabelHeight: CGFloat = 18  // reserved space below chart for time labels
+
+    private static let peakTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    var body: some View {
+        GeometryReader { geometry in
+            let data = audioManager.dbPeakData
+
+            if data.count < 2 {
+                VStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let chartHeight = geometry.size.height - timeLabelHeight
+                let dataStartTime = data.first!.time
+                let dataEndTime = data.last!.time
+                let dataDuration = CGFloat(dataEndTime.timeIntervalSince(dataStartTime))
+                let peakTimeOffset = CGFloat(audioManager.dbPeakTime.timeIntervalSince(dataStartTime))
+
+                let maxOffset = max(0, dataDuration - visibleTimeWindow)
+                let autoOffset = max(0, min(maxOffset, peakTimeOffset - visibleTimeWindow / 2))
+                let clampedOffset = max(0, min(maxOffset, scrollTimeOffset ?? autoOffset))
+
+                let pixelsPerSec = geometry.size.width / visibleTimeWindow
+
+                ZStack {
+                    // Background grid lines
+                    ForEach(stride(from: 20, through: 120, by: 20).map { $0 }, id: \.self) { dbLevel in
+                        let y = yPositionForDb(Double(dbLevel), in: chartHeight)
+                        Path { path in
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: geometry.size.width, y: y))
+                        }
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    }
+
+                    // Gradient fill under curve
+                    Path { path in
+                        var points: [(CGFloat, CGFloat)] = []
+                        for point in data {
+                            let t = CGFloat(point.time.timeIntervalSince(dataStartTime)) - clampedOffset
+                            let x = t * pixelsPerSec
+                            guard x >= -20 && x <= geometry.size.width + 20 else { continue }
+                            let y = yPositionForDb(point.value, in: chartHeight)
+                            points.append((x, y))
+                        }
+                        guard !points.isEmpty else { return }
+
+                        path.move(to: CGPoint(x: points.first!.0, y: chartHeight))
+                        for (x, y) in points {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                        path.addLine(to: CGPoint(x: points.last!.0, y: chartHeight))
+                        path.closeSubpath()
+                    }
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                colorForDb(audioManager.dbPeakValue).opacity(0.6),
+                                colorForDb(audioManager.dbPeakValue).opacity(0.1)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .clipped()
+
+                    // Curve line
+                    Path { path in
+                        var started = false
+                        for point in data {
+                            let t = CGFloat(point.time.timeIntervalSince(dataStartTime)) - clampedOffset
+                            let x = t * pixelsPerSec
+                            guard x >= -20 && x <= geometry.size.width + 20 else { continue }
+                            let y = yPositionForDb(point.value, in: chartHeight)
+                            if !started {
+                                path.move(to: CGPoint(x: x, y: y))
+                                started = true
+                            } else {
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+                        }
+                    }
+                    .stroke(
+                        colorForDb(audioManager.dbPeakValue),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                    )
+                    .clipped()
+
+                    // Peak marker vertical dashed line
+                    let peakX = (peakTimeOffset - clampedOffset) * pixelsPerSec
+                    if peakX >= 0 && peakX <= geometry.size.width {
+                        Path { path in
+                            path.move(to: CGPoint(x: peakX, y: 0))
+                            path.addLine(to: CGPoint(x: peakX, y: chartHeight))
+                        }
+                        .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+                        // Peak dot on curve
+                        let peakY = yPositionForDb(audioManager.dbPeakValue, in: chartHeight)
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 6, height: 6)
+                            .position(x: peakX, y: peakY)
+
+                        // Peak value label
+                        Text(String(format: "%.0f dB", audioManager.dbPeakValue))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(colorForDb(audioManager.dbPeakValue).opacity(0.8))
+                            .cornerRadius(4)
+                            .position(
+                                x: min(max(peakX, 30), geometry.size.width - 30),
+                                y: 12
+                            )
+                    }
+
+                    // Time labels below the chart (aligned to 5-second intervals)
+                    let visibleStartSeconds = dataStartTime.addingTimeInterval(Double(clampedOffset)).timeIntervalSince1970
+                    let visibleEndSeconds = visibleStartSeconds + Double(visibleTimeWindow)
+                    let firstLabelSeconds = ceil(visibleStartSeconds / 5.0) * 5.0
+
+                    ForEach(Array(stride(from: firstLabelSeconds, through: visibleEndSeconds, by: 5.0)), id: \.self) { labelSeconds in
+                        let x = CGFloat(labelSeconds - visibleStartSeconds) * pixelsPerSec
+                        if x >= 10 && x <= geometry.size.width - 10 {
+                            Text(DbPeakView.peakTimeFormatter.string(from: Date(timeIntervalSince1970: labelSeconds)))
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.5))
+                                .position(x: x, y: chartHeight + timeLabelHeight / 2)
+                        }
+                    }
+
+                    // dB level labels
+                    ForEach([30, 60, 90, 120], id: \.self) { dbLevel in
+                        let y = yPositionForDb(Double(dbLevel), in: chartHeight)
+                        Text("\(dbLevel) dB")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .position(x: 30, y: y - 8)
+                    }
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 5)
+                        .onChanged { value in
+                            if !isDragging {
+                                isDragging = true
+                                dragStartOffset = scrollTimeOffset ?? autoOffset
+                            }
+                            let timeDelta = -value.translation.width / pixelsPerSec
+                            scrollTimeOffset = max(0, min(maxOffset, dragStartOffset + timeDelta))
+                        }
+                        .onEnded { value in
+                            isDragging = false
+
+                            // At left edge and swiping right → go to previous visualization
+                            let wasAtLeftEdge = dragStartOffset <= 0.001
+                            if wasAtLeftEdge && value.translation.width > 50 && audioManager.selectedVisualization > 0 {
+                                scrollTimeOffset = nil
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    audioManager.selectedVisualization -= 1
+                                }
+                            }
+                        }
+                )
+                .onChange(of: audioManager.dbPeakValue) { _, _ in
+                    if !isDragging {
+                        scrollTimeOffset = nil
+                    }
+                }
+            }
+        }
+    }
+
+    private func yPositionForDb(_ db: Double, in height: CGFloat) -> CGFloat {
+        let minDb: Double = 20
+        let maxDb: Double = 130
+        let normalizedDb = (db - minDb) / (maxDb - minDb)
+        let clampedNormalized = max(0.0, min(1.0, normalizedDb))
+        return height * (1.0 - CGFloat(clampedNormalized))
+    }
+
+    private func colorForDb(_ db: Double) -> Color {
+        switch db {
+        case 0..<40:
+            return .blue
+        case 40..<60:
+            return .green
+        case 60..<80:
+            return .yellow
+        case 80..<100:
+            return .orange
+        default:
+            return .red
+        }
+    }
+}

@@ -54,8 +54,8 @@ class AudioManager: NSObject, ObservableObject {
     
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
-    private var levelTimer: Timer?
-    private var dbHistoryTimer: Timer?
+    private var displayLink: CADisplayLink?
+    private var lastDbHistoryUpdateTime: CFTimeInterval = 0
     private var currentDb: Float = 50.0
     private var sampleBuffer: [Float] = []
     private let maxSamples = 100
@@ -170,14 +170,9 @@ class AudioManager: NSObject, ObservableObject {
             
             isRecording = true
             
-            levelTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
-                self?.updatePublishedLevel()
-            }
-
-            // Start dB history collection timer at 10 FPS (0.1s intervals)
-            dbHistoryTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.updateDbHistory()
-            }
+            lastDbHistoryUpdateTime = CACurrentMediaTime()
+            displayLink = CADisplayLink(target: self, selector: #selector(updateDisplay(_:)))
+            displayLink?.add(to: .main, forMode: .common)
             
         } catch {
             print("Error starting audio monitoring: \(error)")
@@ -186,10 +181,8 @@ class AudioManager: NSObject, ObservableObject {
     }
     
     func stopMonitoring() {
-        levelTimer?.invalidate()
-        levelTimer = nil
-        dbHistoryTimer?.invalidate()
-        dbHistoryTimer = nil
+        displayLink?.invalidate()
+        displayLink = nil
         
         inputNode?.removeTap(onBus: 0)
         
@@ -285,12 +278,20 @@ class AudioManager: NSObject, ObservableObject {
         }
     }
     
-    private func updatePublishedLevel() {
-        DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.1)) {
-                self.decibelLevel = min(130, Double(self.currentDb))
-                self.waveformSamples = self.sampleBuffer
-            }
+    @objc private func updateDisplay(_ displayLink: CADisplayLink) {
+        let currentTime = displayLink.targetTimestamp
+        
+        // Update fast visualizations (Level & Waveform) at display refresh rate for high FPS
+        // using interactiveSpring for highly responsive yet smooth rendering
+        withAnimation(.interactiveSpring(response: 0.1, dampingFraction: 0.8)) {
+            self.decibelLevel = min(130, Double(self.currentDb))
+            self.waveformSamples = self.sampleBuffer
+        }
+        
+        // Throttle dB history collection to 10 FPS (0.1s intervals) to prevent accelerated scrolling
+        if currentTime - lastDbHistoryUpdateTime >= 0.1 {
+            lastDbHistoryUpdateTime = currentTime
+            updateDbHistory()
         }
     }
 

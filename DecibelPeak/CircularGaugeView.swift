@@ -77,7 +77,6 @@ struct CircularGaugeView: View {
                     .frame(width: size, height: size)
                     .rotationEffect(.degrees(135))
                     .shadow(color: isRecording ? decibelColor.opacity(0.5) : Color.clear, radius: size * 0.036)
-                    .animation(.easeInOut(duration: 0.3), value: isRecording ? value : 0)
 
                 ForEach(0..<12) { index in
                     Rectangle()
@@ -104,7 +103,6 @@ struct CircularGaugeView: View {
                             .font(.system(size: size * 0.257, weight: .bold, design: .rounded))
                             .foregroundColor(decibelColor)
                             .contentTransition(.numericText())
-                            .animation(.easeInOut(duration: 0.2), value: value)
                     } else {
                         Text("–")
                             .font(.system(size: size * 0.257, weight: .bold, design: .rounded))
@@ -138,7 +136,6 @@ struct CircularGaugeView: View {
                         .frame(width: size, height: size)
                         .blur(radius: blurRadius)
                         .allowsHitTesting(false)
-                        .animation(.easeInOut(duration: 0.5), value: value)
                 }
             }
             .frame(width: size, height: size)

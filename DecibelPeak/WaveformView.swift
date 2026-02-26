@@ -67,7 +67,6 @@ struct SpectrumView: View {
                         )
                         .frame(height: max(4, height))
                         .frame(maxHeight: .infinity, alignment: .bottom)
-                        .animation(.easeInOut(duration: 0.05), value: height)
                 }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
@@ -118,7 +117,6 @@ struct CircularWaveformView: View {
                         .frame(width: lineWidth, height: max(2, barHeight))
                         .offset(y: -radius / 2 - barHeight / 2)
                         .rotationEffect(.degrees(angle))
-                        .animation(.easeInOut(duration: 0.1), value: barHeight)
                 }
             }
         }

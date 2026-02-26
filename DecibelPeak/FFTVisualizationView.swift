@@ -32,7 +32,6 @@ struct FFTSpectrumView: View {
                         )
                         .frame(height: normalizedHeight)
                         .frame(maxHeight: .infinity, alignment: .bottom)
-                        .animation(.easeInOut(duration: 0.08), value: height)
                 }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
@@ -99,7 +98,6 @@ struct FFTCircularView: View {
                         .frame(width: lineWidth, height: max(1, barHeight))
                         .offset(y: -radius * 0.6 - barHeight / 2)
                         .rotationEffect(.degrees(angle))
-                        .animation(.easeInOut(duration: 0.1), value: barHeight)
                 }
 
                 // Center dot

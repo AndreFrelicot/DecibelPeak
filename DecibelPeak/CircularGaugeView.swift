@@ -14,7 +14,8 @@ struct CircularGaugeView: View {
     let maxValue: Double = 130
     
     private var normalizedValue: Double {
-        (value - minValue) / (maxValue - minValue)
+        guard value.isFinite else { return 0.0 }
+        return ((value - minValue) / (maxValue - minValue)).clamped(to: 0.0...1.0)
     }
     
     private var rotation: Double {

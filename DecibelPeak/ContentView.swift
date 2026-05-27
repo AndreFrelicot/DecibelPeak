@@ -19,6 +19,7 @@ struct ResponsiveLayoutConfig {
 
 
 struct ScreenSizeConfiguration {
+    @MainActor
     static func getLayoutConfig(for geometry: GeometryProxy) -> ResponsiveLayoutConfig {
         let screenWidth = geometry.size.width
         let screenHeight = geometry.size.height

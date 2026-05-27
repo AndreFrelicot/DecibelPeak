@@ -21,7 +21,72 @@ struct DbPeakDataPoint {
     let time: Date
 }
 
-class AudioManager: NSObject, ObservableObject {
+private final class AudioSnapshotStore: @unchecked Sendable {
+    private let lock = NSLock()
+    private var currentDb: Float = 50.0
+    private var sampleBuffer: [Float]
+    private var activeCalibrationOffset: Float = 0.0
+    private var activeGeneration = 0
+
+    init(maxSamples: Int) {
+        sampleBuffer = Array(repeating: 0.0, count: maxSamples)
+    }
+
+    func setCalibrationOffset(_ offset: Double) {
+        lock.withLock {
+            activeCalibrationOffset = Float(offset)
+        }
+    }
+
+    func setGeneration(_ generation: Int) {
+        lock.withLock {
+            activeGeneration = generation
+        }
+    }
+
+    func calibrationOffset(for generation: Int) -> Float? {
+        lock.withLock {
+            generation == activeGeneration ? activeCalibrationOffset : nil
+        }
+    }
+
+    func update(calibratedDb: Float, samples: [Float], generation: Int) -> Bool {
+        lock.withLock {
+            guard generation == activeGeneration else { return false }
+            currentDb = currentDb * 0.8 + calibratedDb * 0.2
+            sampleBuffer = samples
+            return true
+        }
+    }
+
+    func snapshot() -> (db: Float, samples: [Float]) {
+        lock.withLock {
+            (currentDb, sampleBuffer)
+        }
+    }
+
+    func reset(maxSamples: Int, generation: Int) {
+        lock.withLock {
+            activeGeneration = generation
+            currentDb = 0.0
+            sampleBuffer = Array(repeating: 0.0, count: maxSamples)
+        }
+    }
+}
+
+private final class DisplayLinkTarget {
+    weak var audioManager: AudioManager?
+
+    init(audioManager: AudioManager) {
+        self.audioManager = audioManager
+    }
+
+    @objc func update(_ displayLink: CADisplayLink) {
+        audioManager?.updateDisplay(displayLink)
+    }
+}
+
+final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var decibelLevel: Double = 50.0
     @Published var isRecording: Bool = false
     @Published var permissionGranted: Bool = false
@@ -46,6 +111,9 @@ class AudioManager: NSObject, ObservableObject {
     static let calibrationStep: Double = 0.5
 
     private static let calibrationKey = "calibrationOffset"
+    private static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
 
     private var waterfallBuffer: [[Float]] = []
     private var waterfallWriteIndex = 0
@@ -55,11 +123,13 @@ class AudioManager: NSObject, ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
     private var displayLink: CADisplayLink?
+    private var displayLinkTarget: DisplayLinkTarget?
+    private var pendingSessionDeactivation: DispatchWorkItem?
+    private var monitoringGeneration = 0
     private var lastDbHistoryUpdateTime: CFTimeInterval = 0
-    private var currentDb: Float = 50.0
-    private var sampleBuffer: [Float] = []
     private let maxSamples = 100
     private let maxWaterfallRows = 80
+    private lazy var audioSnapshotStore = AudioSnapshotStore(maxSamples: maxSamples)
     private let fftAnalyzer = FFTAnalyzer(fftSize: 1024)
     private var peakBuffer: [DbPeakDataPoint] = []
     private var sessionPeakDb: Double = 0.0
@@ -76,7 +146,10 @@ class AudioManager: NSObject, ObservableObject {
         dbHistory = Array(repeating: 0.0, count: 100)
         // Load saved calibration offset
         calibrationOffset = UserDefaults.standard.double(forKey: AudioManager.calibrationKey)
-        requestPermission()
+        updateActiveCalibrationOffset()
+        if !AudioManager.isRunningTests {
+            requestPermission()
+        }
     }
 
     // MARK: - Calibration Methods
@@ -84,10 +157,12 @@ class AudioManager: NSObject, ObservableObject {
     func showCalibration() {
         tempCalibrationOffset = calibrationOffset
         showCalibrationOverlay = true
+        updateActiveCalibrationOffset()
     }
 
     func hideCalibration() {
         showCalibrationOverlay = false
+        updateActiveCalibrationOffset()
     }
 
     func setTempCalibrationOffset(_ offset: Double) {
@@ -110,32 +185,41 @@ class AudioManager: NSObject, ObservableObject {
         }
 
         tempCalibrationOffset = newValue
+        updateActiveCalibrationOffset()
     }
 
     func saveCalibration() {
         calibrationOffset = tempCalibrationOffset
         UserDefaults.standard.set(calibrationOffset, forKey: AudioManager.calibrationKey)
         showCalibrationOverlay = false
+        updateActiveCalibrationOffset()
     }
 
     func cancelCalibration() {
         tempCalibrationOffset = calibrationOffset
         showCalibrationOverlay = false
+        updateActiveCalibrationOffset()
     }
     
     func requestPermission() {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
-            DispatchQueue.main.async {
-                self?.permissionGranted = granted
+            guard let audioManager = self else { return }
+            DispatchQueue.main.async { [audioManager] in
+                audioManager.permissionGranted = granted
 
                 // Auto-start monitoring when permissions are granted
                 if granted {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        self?.startMonitoring()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak audioManager] in
+                        audioManager?.startMonitoring()
                     }
                 }
             }
         }
+    }
+
+    private func updateActiveCalibrationOffset() {
+        let offset = showCalibrationOverlay ? tempCalibrationOffset : calibrationOffset
+        audioSnapshotStore.setCalibrationOffset(offset)
     }
     
     private func configureAudioSession() throws {
@@ -151,6 +235,12 @@ class AudioManager: NSObject, ObservableObject {
     
     func startMonitoring() {
         guard permissionGranted else { return }
+        guard !isRecording, audioEngine == nil else { return }
+        pendingSessionDeactivation?.cancel()
+        pendingSessionDeactivation = nil
+        monitoringGeneration += 1
+        let generation = monitoringGeneration
+        audioSnapshotStore.setGeneration(generation)
         
         do {
             try configureAudioSession()
@@ -160,9 +250,16 @@ class AudioManager: NSObject, ObservableObject {
             
             inputNode = audioEngine.inputNode
             let recordingFormat = inputNode?.outputFormat(forBus: 0)
+            let maxSamples = maxSamples
+            let snapshotStore = audioSnapshotStore
             
             inputNode?.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-                self?.processAudioBuffer(buffer)
+                self?.processAudioBuffer(
+                    buffer,
+                    maxSamples: maxSamples,
+                    snapshotStore: snapshotStore,
+                    generation: generation
+                )
             }
             
             audioEngine.prepare()
@@ -171,7 +268,8 @@ class AudioManager: NSObject, ObservableObject {
             isRecording = true
             
             lastDbHistoryUpdateTime = CACurrentMediaTime()
-            displayLink = CADisplayLink(target: self, selector: #selector(updateDisplay(_:)))
+            displayLinkTarget = DisplayLinkTarget(audioManager: self)
+            displayLink = CADisplayLink(target: displayLinkTarget!, selector: #selector(DisplayLinkTarget.update(_:)))
             displayLink?.add(to: .main, forMode: .common)
             
         } catch {
@@ -181,61 +279,74 @@ class AudioManager: NSObject, ObservableObject {
     }
     
     func stopMonitoring() {
+        monitoringGeneration += 1
+        let generation = monitoringGeneration
+
         displayLink?.invalidate()
         displayLink = nil
+        displayLinkTarget = nil
         
         inputNode?.removeTap(onBus: 0)
+        inputNode = nil
         
         audioEngine?.stop()
         audioEngine = nil
         
         isRecording = false
         
+        audioSnapshotStore.reset(maxSamples: maxSamples, generation: generation)
+
         // Reset values when stopping
-        DispatchQueue.main.async {
-            self.decibelLevel = 0.0
-            self.waveformSamples = Array(repeating: 0.0, count: self.maxSamples)
-            self.frequencyBands = Array(repeating: 0.0, count: 64)
-            self.waterfallData = Array(repeating: Array(repeating: 0.0, count: 64), count: self.maxWaterfallRows)
-            self.waterfallBuffer = Array(repeating: Array(repeating: 0.0, count: 64), count: self.maxWaterfallRows)
-            self.waterfallWriteIndex = 0
-            self.waterfallUpdateCounter = 0
-            self.lastWaterfallBands = Array(repeating: 0.0, count: 64)
-            self.currentDb = 0.0
-            self.sampleBuffer = Array(repeating: 0.0, count: self.maxSamples)
-            self.dbHistory = Array(repeating: 0.0, count: 100)
-            self.timestampedDbHistory = []
-            self.peakBuffer = []
-            self.sessionPeakDb = 0.0
-            self.sessionPeakTime = Date()
-            self.frozenPeakSnapshot = nil
-            self.dbPeakData = []
-            self.dbPeakValue = 0.0
-            self.dbPeakTime = Date()
-        }
+        decibelLevel = 0.0
+        waveformSamples = Array(repeating: 0.0, count: maxSamples)
+        frequencyBands = Array(repeating: 0.0, count: 64)
+        waterfallData = Array(repeating: Array(repeating: 0.0, count: 64), count: maxWaterfallRows)
+        waterfallBuffer = Array(repeating: Array(repeating: 0.0, count: 64), count: maxWaterfallRows)
+        waterfallWriteIndex = 0
+        waterfallUpdateCounter = 0
+        lastWaterfallBands = Array(repeating: 0.0, count: 64)
+        dbHistory = Array(repeating: 0.0, count: 100)
+        timestampedDbHistory = []
+        peakBuffer = []
+        sessionPeakDb = 0.0
+        sessionPeakTime = Date()
+        frozenPeakSnapshot = nil
+        dbPeakData = []
+        dbPeakValue = 0.0
+        dbPeakTime = Date()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        let deactivation = DispatchWorkItem { [weak self] in
+            guard let self, self.monitoringGeneration == generation, !self.isRecording else { return }
             do {
-                try AVAudioSession.sharedInstance().setActive(false)
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             } catch {
                 print("Error deactivating audio session: \(error)")
             }
         }
+        pendingSessionDeactivation = deactivation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: deactivation)
     }
     
-    private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+    private func processAudioBuffer(
+        _ buffer: AVAudioPCMBuffer,
+        maxSamples: Int,
+        snapshotStore: AudioSnapshotStore,
+        generation: Int
+    ) {
         guard let channelData = buffer.floatChannelData else { return }
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return }
+        guard let calibrationOffset = snapshotStore.calibrationOffset(for: generation) else { return }
         
         let channelDataValue = channelData.pointee
-        let channelDataArray = Array(UnsafeBufferPointer(start: channelDataValue, count: Int(buffer.frameLength)))
+        let channelDataArray = Array(UnsafeBufferPointer(start: channelDataValue, count: frameLength))
         
         // Calculate RMS for decibel level
-        let rms = sqrt(channelDataArray.map { $0 * $0 }.reduce(0, +) / Float(channelDataArray.count))
+        let sumOfSquares = channelDataArray.reduce(Float(0.0)) { $0 + ($1 * $1) }
+        let rms = sqrt(sumOfSquares / Float(channelDataArray.count))
         let avgPower = 20 * log10(max(0.00001, rms))
         // Base calibration (100) + user calibration offset (use temp offset for live preview)
-        let activeOffset = showCalibrationOverlay ? tempCalibrationOffset : calibrationOffset
-        let calibratedDb = avgPower + 100 + Float(activeOffset)
-        currentDb = currentDb * 0.8 + calibratedDb * 0.2
+        let calibratedDb = AudioManager.sanitizedDecibel(avgPower + 100 + calibrationOffset)
         //currentDb = Float.random(in: 90...140)
         
         // Update waveform samples
@@ -259,7 +370,7 @@ class AudioManager: NSObject, ObservableObject {
             newSamples.insert(0.0, at: 0)
         }
         
-        sampleBuffer = newSamples
+        guard snapshotStore.update(calibratedDb: calibratedDb, samples: newSamples, generation: generation) else { return }
         
         // Perform FFT analysis
         let fftMagnitudes = fftAnalyzer.analyze(samples: channelDataArray)
@@ -267,6 +378,7 @@ class AudioManager: NSObject, ObservableObject {
         
         // Store FFT data for publishing
         DispatchQueue.main.async {
+            guard self.monitoringGeneration == generation, self.isRecording else { return }
             self.frequencyBands = bands
 
             // Throttle waterfall updates to 15 FPS (every 2nd frame)
@@ -278,14 +390,15 @@ class AudioManager: NSObject, ObservableObject {
         }
     }
     
-    @objc private func updateDisplay(_ displayLink: CADisplayLink) {
+    fileprivate func updateDisplay(_ displayLink: CADisplayLink) {
         let currentTime = displayLink.targetTimestamp
+        let snapshot = audioSnapshotStore.snapshot()
         
         // Update fast visualizations (Level & Waveform) at display refresh rate for high FPS
         // using interactiveSpring for highly responsive yet smooth rendering
         withAnimation(.interactiveSpring(response: 0.1, dampingFraction: 0.8)) {
-            self.decibelLevel = min(130, Double(self.currentDb))
-            self.waveformSamples = self.sampleBuffer
+            self.decibelLevel = Double(snapshot.db)
+            self.waveformSamples = snapshot.samples
         }
         
         // Throttle dB history collection to 10 FPS (0.1s intervals) to prevent accelerated scrolling
@@ -318,6 +431,11 @@ class AudioManager: NSObject, ObservableObject {
             orderedData.append(row) // Include all rows, even empty ones
         }
         waterfallData = orderedData
+    }
+
+    static func sanitizedDecibel(_ value: Float) -> Float {
+        guard value.isFinite else { return 0.0 }
+        return min(130.0, max(0.0, value))
     }
 
     private func updateDbHistory() {
@@ -387,15 +505,16 @@ class AudioManager: NSObject, ObservableObject {
         let visibleTimespan = timeWindow + bufferTime
         let cutoffTime = currentTime - visibleTimespan
 
-        let initialCount = timestampedDbHistory.count
         timestampedDbHistory.removeAll { $0.timestamp < cutoffTime }
-        let finalCount = timestampedDbHistory.count
 
         // Quietly cull old data points to maintain performance
     }
 
     deinit {
-        stopMonitoring()
+        pendingSessionDeactivation?.cancel()
+        displayLink?.invalidate()
+        inputNode?.removeTap(onBus: 0)
+        audioEngine?.stop()
     }
 }
 

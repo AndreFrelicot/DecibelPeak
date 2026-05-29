@@ -120,7 +120,7 @@ struct FFTCircularView: View {
     }
     
     private func colorForFrequency(_ index: Int, amplitude: Float) -> Color {
-        let frequencyRatio = Float(index) / Float(frequencyBands.count - 1)
+        let frequencyRatio = Float(index) / Float(max(frequencyBands.count - 1, 1))
         
         switch frequencyRatio {
         case 0.0..<0.2:
@@ -150,9 +150,9 @@ struct FFTWaterfallView: View {
 
     private func drawWaterfall(context: GraphicsContext, size: CGSize) {
         let data = audioManager.waterfallData
-        guard !data.isEmpty else { return }
+        guard let firstRow = data.first, !firstRow.isEmpty else { return }
 
-        let cols = data[0].count
+        let cols = firstRow.count
 
         // Use fixed row count for consistent layout - no more stretching!
         let isLandscape = size.width > size.height
@@ -166,7 +166,7 @@ struct FFTWaterfallView: View {
             let rowData = data[rowIndex]
             let y = CGFloat(rowIndex) * cellHeight
 
-            for (colIndex, amplitude) in rowData.enumerated() {
+            for (colIndex, amplitude) in rowData.prefix(cols).enumerated() {
                 let x = CGFloat(colIndex) * cellWidth
                 let rect = CGRect(x: x, y: y, width: cellWidth, height: cellHeight)
 
@@ -372,7 +372,7 @@ struct DbPeakView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let chartHeight = geometry.size.height - timeLabelHeight
+                let chartHeight = max(1, geometry.size.height - timeLabelHeight)
                 let dataStartTime = data.first!.time
                 let dataEndTime = data.last!.time
                 let dataDuration = CGFloat(dataEndTime.timeIntervalSince(dataStartTime))

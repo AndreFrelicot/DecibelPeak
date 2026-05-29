@@ -188,6 +188,7 @@ struct ScreenSizeConfiguration {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var audioManager = AudioManager()
     @State private var showingPermissionAlert = false
     @State private var isLandscape = false
@@ -435,12 +436,19 @@ struct ContentView: View {
                 // Use screen bounds to reliably detect current orientation
                 let screenBounds = UIScreen.main.bounds
                 let isCurrentlyLandscape = screenBounds.width > screenBounds.height
-                let targetOrientation: UIInterfaceOrientation = isCurrentlyLandscape ? .portrait : .landscapeRight
+                let targetOrientation: UIInterfaceOrientationMask = isCurrentlyLandscape ? .portrait : .landscapeRight
 
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                    windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: targetOrientation == .portrait ? .portrait : .landscapeRight))
+                if let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first(where: { $0.activationState == .foregroundActive }) {
+                    windowScene.windows
+                        .first(where: \.isKeyWindow)?
+                        .rootViewController?
+                        .setNeedsUpdateOfSupportedInterfaceOrientations()
+                    windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: targetOrientation)) { error in
+                        print("Error requesting orientation change: \(error)")
+                    }
                 }
-                UIDevice.current.setValue(targetOrientation.rawValue, forKey: "orientation")
             }) {
                 Image(systemName: "rotate.right")
                     .font(.system(size: 16, weight: .medium))
@@ -462,11 +470,15 @@ struct ContentView: View {
             Text(LocalizedStringKey("microphone_permission_message"))
         }
         .onAppear {
+            audioManager.handleScenePhase(scenePhase)
             if audioManager.permissionGranted {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     audioManager.startMonitoring()
                 }
             }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            audioManager.handleScenePhase(newPhase)
         }
     }
 }

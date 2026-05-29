@@ -112,7 +112,15 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
 
     private static let calibrationKey = "calibrationOffset"
     private static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let environment = ProcessInfo.processInfo.environment
+        let arguments = ProcessInfo.processInfo.arguments
+
+        return environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil
+            || environment["XCInjectBundleInto"] != nil
+            || arguments.contains { $0.hasSuffix(".xctest") || $0.contains("XCTest") }
+            || NSClassFromString("XCTest.XCTestCase") != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 
     private var waterfallBuffer: [[Float]] = []
@@ -125,6 +133,12 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     private var displayLink: CADisplayLink?
     private var displayLinkTarget: DisplayLinkTarget?
     private var pendingSessionDeactivation: DispatchWorkItem?
+    private var pendingRouteRestart: DispatchWorkItem?
+    private var notificationObservers: [NSObjectProtocol] = []
+    private var shouldResumeAfterInterruption = false
+    private var shouldRestartOnForeground = false
+    private var isSceneActive = false
+    private var routeRestartGeneration = 0
     private var monitoringGeneration = 0
     private var lastDbHistoryUpdateTime: CFTimeInterval = 0
     private let maxSamples = 100
@@ -147,6 +161,7 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         // Load saved calibration offset
         calibrationOffset = UserDefaults.standard.double(forKey: AudioManager.calibrationKey)
         updateActiveCalibrationOffset()
+        registerAudioSessionObservers()
         if !AudioManager.isRunningTests {
             requestPermission()
         }
@@ -221,6 +236,139 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         let offset = showCalibrationOverlay ? tempCalibrationOffset : calibrationOffset
         audioSnapshotStore.setCalibrationOffset(offset)
     }
+
+    func handleScenePhase(_ scenePhase: ScenePhase) {
+        switch scenePhase {
+        case .active:
+            isSceneActive = true
+            guard shouldRestartOnForeground else { return }
+            shouldRestartOnForeground = false
+            guard permissionGranted else { return }
+            startMonitoring()
+        case .background:
+            shouldRestartOnForeground = isRecording || shouldResumeAfterInterruption || pendingRouteRestart != nil
+            isSceneActive = false
+            cancelPendingRouteRestart()
+            if isRecording {
+                stopMonitoring(resetAutoResumeFlags: false)
+            }
+        case .inactive:
+            if pendingRouteRestart != nil {
+                shouldRestartOnForeground = true
+            }
+            isSceneActive = false
+            cancelPendingRouteRestart()
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func registerAudioSessionObservers() {
+        let session = AVAudioSession.sharedInstance()
+        let center = NotificationCenter.default
+
+        notificationObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioSessionInterruption(notification)
+            }
+        )
+
+        notificationObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.routeChangeNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioRouteChange(notification)
+            }
+        )
+    }
+
+    private func handleAudioSessionInterruption(_ notification: Notification) {
+        guard
+            let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+        else {
+            return
+        }
+
+        switch type {
+        case .began:
+            shouldResumeAfterInterruption = isRecording
+            if isRecording {
+                stopMonitoring(resetAutoResumeFlags: false)
+            }
+        case .ended:
+            let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+            guard shouldResumeAfterInterruption, permissionGranted, options.contains(.shouldResume) else {
+                shouldResumeAfterInterruption = false
+                return
+            }
+            shouldResumeAfterInterruption = false
+            guard isSceneActive else {
+                shouldRestartOnForeground = true
+                return
+            }
+            startMonitoring()
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleAudioRouteChange(_ notification: Notification) {
+        guard isRecording else { return }
+        guard
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
+        else {
+            return
+        }
+
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
+            restartMonitoringAfterRouteChange()
+        default:
+            break
+        }
+    }
+
+    private func restartMonitoringAfterRouteChange() {
+        guard permissionGranted, isSceneActive else { return }
+        cancelPendingRouteRestart()
+        stopMonitoring(resetAutoResumeFlags: false)
+
+        routeRestartGeneration += 1
+        let restartGeneration = routeRestartGeneration
+        let routeRestart = DispatchWorkItem { [weak self] in
+            guard
+                let self,
+                self.routeRestartGeneration == restartGeneration,
+                self.permissionGranted,
+                self.isSceneActive,
+                !self.isRecording,
+                self.audioEngine == nil
+            else {
+                return
+            }
+
+            self.pendingRouteRestart = nil
+            self.startMonitoring()
+        }
+        pendingRouteRestart = routeRestart
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: routeRestart)
+    }
+
+    private func cancelPendingRouteRestart() {
+        routeRestartGeneration += 1
+        pendingRouteRestart?.cancel()
+        pendingRouteRestart = nil
+    }
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
@@ -234,7 +382,8 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     }
     
     func startMonitoring() {
-        guard permissionGranted else { return }
+        guard permissionGranted, isSceneActive else { return }
+        cancelPendingRouteRestart()
         guard !isRecording, audioEngine == nil else { return }
         pendingSessionDeactivation?.cancel()
         pendingSessionDeactivation = nil
@@ -266,6 +415,7 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
             try audioEngine.start()
             
             isRecording = true
+            shouldResumeAfterInterruption = false
             
             lastDbHistoryUpdateTime = CACurrentMediaTime()
             displayLinkTarget = DisplayLinkTarget(audioManager: self)
@@ -279,6 +429,16 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     }
     
     func stopMonitoring() {
+        stopMonitoring(resetAutoResumeFlags: true)
+    }
+
+    private func stopMonitoring(resetAutoResumeFlags: Bool) {
+        if resetAutoResumeFlags {
+            shouldResumeAfterInterruption = false
+            shouldRestartOnForeground = false
+            cancelPendingRouteRestart()
+        }
+
         monitoringGeneration += 1
         let generation = monitoringGeneration
 
@@ -377,7 +537,8 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         let bands = fftAnalyzer.getFrequencyBands(magnitudes: fftMagnitudes, bandCount: 64)
         
         // Store FFT data for publishing
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             guard self.monitoringGeneration == generation, self.isRecording else { return }
             self.frequencyBands = bands
 
@@ -409,16 +570,25 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func updateWaterfallData(with bands: [Float]) {
+        guard !bands.isEmpty else { return }
+
         // Apply smoothing to reduce sudden jumps
         let smoothingFactor: Float = 0.3
+        let previousBands = lastWaterfallBands.count == bands.count
+            ? lastWaterfallBands
+            : Array(repeating: 0.0, count: bands.count)
         var smoothedBands: [Float] = []
-        for i in 0..<bands.count {
-            let smoothed = lastWaterfallBands[i] * (1.0 - smoothingFactor) + bands[i] * smoothingFactor
+        for i in bands.indices {
+            let smoothed = previousBands[i] * (1.0 - smoothingFactor) + bands[i] * smoothingFactor
             smoothedBands.append(smoothed)
         }
         lastWaterfallBands = smoothedBands
 
         // Update circular buffer
+        if waterfallBuffer[waterfallWriteIndex].count != smoothedBands.count {
+            waterfallBuffer = Array(repeating: Array(repeating: 0.0, count: smoothedBands.count), count: maxWaterfallRows)
+            waterfallWriteIndex = 0
+        }
         waterfallBuffer[waterfallWriteIndex] = smoothedBands
         waterfallWriteIndex = (waterfallWriteIndex + 1) % maxWaterfallRows
 
@@ -511,7 +681,9 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     deinit {
+        notificationObservers.forEach(NotificationCenter.default.removeObserver)
         pendingSessionDeactivation?.cancel()
+        pendingRouteRestart?.cancel()
         displayLink?.invalidate()
         inputNode?.removeTap(onBus: 0)
         audioEngine?.stop()

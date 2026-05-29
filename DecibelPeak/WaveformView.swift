@@ -15,7 +15,7 @@ struct WaveformView: View {
     var body: some View {
         GeometryReader { geometry in
             Path { path in
-                guard !samples.isEmpty else { return }
+                guard samples.count > 1 else { return }
                 
                 let width = geometry.size.width
                 let height = geometry.size.height

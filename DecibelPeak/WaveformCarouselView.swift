@@ -14,21 +14,37 @@ struct WaveformCarouselView: View {
     @ObservedObject var audioManager: AudioManager
     @State private var autoScroll = true
     
-    private let visualizations = ["viz_wave", "viz_spectrum", "viz_fft_bars", "viz_fft_circle", "viz_waterfall", "viz_db_curve", "viz_db_peak"]
+    private static let visualizations = ["viz_wave", "viz_spectrum", "viz_fft_bars", "viz_fft_circle", "viz_waterfall", "viz_db_curve", "viz_db_peak"]
+
+    private var selectedVisualizationIndex: Int {
+        Self.safeVisualizationIndex(audioManager.selectedVisualization, count: Self.visualizations.count)
+    }
+
+    private var selectedVisualizationBinding: Binding<Int> {
+        Binding(
+            get: { selectedVisualizationIndex },
+            set: { audioManager.selectedVisualization = Self.safeVisualizationIndex($0, count: Self.visualizations.count) }
+        )
+    }
+
+    static func safeVisualizationIndex(_ index: Int, count: Int) -> Int {
+        guard count > 0, (0..<count).contains(index) else { return 0 }
+        return index
+    }
     
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text(LocalizedStringKey(visualizations[audioManager.selectedVisualization]))
+                Text(LocalizedStringKey(Self.visualizations[selectedVisualizationIndex]))
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
 
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    ForEach(0..<visualizations.count, id: \.self) { index in
+                    ForEach(0..<Self.visualizations.count, id: \.self) { index in
                         Circle()
-                            .fill(index == audioManager.selectedVisualization ? .white : .white.opacity(0.3))
+                            .fill(index == selectedVisualizationIndex ? .white : .white.opacity(0.3))
                             .frame(width: 6, height: 6)
                             .onTapGesture {
                                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -67,7 +83,7 @@ struct WaveformCarouselView: View {
                         )
                 )
                 .overlay(
-                    TabView(selection: $audioManager.selectedVisualization) {
+                    TabView(selection: selectedVisualizationBinding) {
                         WaveformView(
                             samples: samples,
                             color: .white,
@@ -109,14 +125,14 @@ struct WaveformCarouselView: View {
         .onReceive(Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()) { _ in
             if autoScroll && isRecording {
                 withAnimation(.easeInOut(duration: 0.5)) {
-                    audioManager.selectedVisualization = (audioManager.selectedVisualization + 1) % visualizations.count
+                    audioManager.selectedVisualization = (selectedVisualizationIndex + 1) % Self.visualizations.count
                 }
             }
         }
         .onTapGesture {
             autoScroll = false
             withAnimation(.easeInOut(duration: 0.3)) {
-                audioManager.selectedVisualization = (audioManager.selectedVisualization + 1) % visualizations.count
+                audioManager.selectedVisualization = (selectedVisualizationIndex + 1) % Self.visualizations.count
             }
         }
     }

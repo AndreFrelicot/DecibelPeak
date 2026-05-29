@@ -40,6 +40,25 @@ struct DecibelPeakTests {
         #expect(bands.allSatisfy { $0.isFinite })
     }
 
+    @Test func fftAnalyzerSanitizesNonFiniteSamples() {
+        let analyzer = FFTAnalyzer(fftSize: 8)
+        let magnitudes = analyzer.analyze(samples: [.nan, .infinity, -.infinity, 0.1, -0.1, 0.2, -0.2, 0.0])
+
+        #expect(magnitudes.count == 4)
+        #expect(magnitudes.allSatisfy { $0.isFinite && (0.0...1.0).contains($0) })
+    }
+
+    @Test func fftFrequencyBandsClampNonFiniteMagnitudes() {
+        let analyzer = FFTAnalyzer(fftSize: 8)
+        let bands = analyzer.getFrequencyBands(
+            magnitudes: [.nan, .infinity, -.infinity, 2.0, -1.0, 0.5],
+            bandCount: 4
+        )
+
+        #expect(bands.count == 4)
+        #expect(bands.allSatisfy { $0.isFinite && (0.0...1.0).contains($0) })
+    }
+
     @Test func waveformCarouselSafeVisualizationIndexClampsOutOfRangeValues() {
         #expect(WaveformCarouselView.safeVisualizationIndex(3, count: 7) == 3)
         #expect(WaveformCarouselView.safeVisualizationIndex(-1, count: 7) == 0)

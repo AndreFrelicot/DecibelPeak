@@ -48,6 +48,7 @@ final class FFTAnalyzer: @unchecked Sendable {
             guard let inputBaseAddress = inputBuffer.baseAddress else { return }
             vDSP_vmul(inputBaseAddress, 1, window, 1, &windowedInput, 1, vDSP_Length(fftSize))
         }
+        sanitizeFiniteValues(&windowedInput)
         
         // Convert to split complex format and perform FFT
         return lock.withLock {
@@ -71,7 +72,7 @@ final class FFTAnalyzer: @unchecked Sendable {
                     // Convert to dB scale and normalize
                     var dbMagnitudes = [Float](repeating: 0.0, count: fftSize / 2)
                     for i in 0..<magnitudes.count {
-                        let magnitude = max(0.000001, magnitudes[i])  // Prevent log(0)
+                        let magnitude = magnitudes[i].isFinite ? max(0.000001, magnitudes[i]) : 0.000001
                         dbMagnitudes[i] = 20 * log10(magnitude)
                     }
 
@@ -81,7 +82,7 @@ final class FFTAnalyzer: @unchecked Sendable {
 
                     for i in 0..<dbMagnitudes.count {
                         dbMagnitudes[i] = max(minDB, min(maxDB, dbMagnitudes[i]))
-                        dbMagnitudes[i] = (dbMagnitudes[i] - minDB) / (maxDB - minDB)
+                        dbMagnitudes[i] = Self.sanitizedNormalizedMagnitude((dbMagnitudes[i] - minDB) / (maxDB - minDB))
                     }
 
                     return dbMagnitudes
@@ -92,7 +93,7 @@ final class FFTAnalyzer: @unchecked Sendable {
     
     func getFrequencyBands(magnitudes: [Float], sampleRate: Float = 44100.0, bandCount: Int = 32) -> [Float] {
         guard bandCount > 0 else { return [] }
-        guard !magnitudes.isEmpty, sampleRate > 0 else {
+        guard !magnitudes.isEmpty, sampleRate.isFinite, sampleRate > 0 else {
             return Array(repeating: 0.0, count: bandCount)
         }
 
@@ -126,9 +127,9 @@ final class FFTAnalyzer: @unchecked Sendable {
                 let endBin = min(magnitudes.count - 1, binIndex + 1)
                 var sum: Float = 0.0
                 var count: Float = 0.0
-                
+
                 for bin in startBin...endBin {
-                    sum += magnitudes[bin]
+                    sum += Self.sanitizedNormalizedMagnitude(magnitudes[bin])
                     count += 1.0
                 }
                 
@@ -137,5 +138,16 @@ final class FFTAnalyzer: @unchecked Sendable {
         }
         
         return bands
+    }
+
+    private func sanitizeFiniteValues(_ values: inout [Float]) {
+        for index in values.indices where !values[index].isFinite {
+            values[index] = 0.0
+        }
+    }
+
+    static func sanitizedNormalizedMagnitude(_ value: Float) -> Float {
+        guard value.isFinite else { return 0.0 }
+        return min(1.0, max(0.0, value))
     }
 }

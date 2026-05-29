@@ -232,6 +232,10 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    func refreshPermissionState() {
+        permissionGranted = AVAudioApplication.shared.recordPermission == .granted
+    }
+
     private func updateActiveCalibrationOffset() {
         let offset = showCalibrationOverlay ? tempCalibrationOffset : calibrationOffset
         audioSnapshotStore.setCalibrationOffset(offset)
@@ -241,6 +245,7 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         switch scenePhase {
         case .active:
             isSceneActive = true
+            refreshPermissionState()
             guard shouldRestartOnForeground else { return }
             shouldRestartOnForeground = false
             guard permissionGranted else { return }

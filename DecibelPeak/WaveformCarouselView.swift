@@ -20,6 +20,10 @@ struct WaveformCarouselView: View {
         Self.safeVisualizationIndex(audioManager.selectedVisualization, count: Self.visualizations.count)
     }
 
+    private var isDbPeakSelected: Bool {
+        Self.visualizations[selectedVisualizationIndex] == "viz_db_peak"
+    }
+
     private var selectedVisualizationBinding: Binding<Int> {
         Binding(
             get: { selectedVisualizationIndex },
@@ -31,6 +35,11 @@ struct WaveformCarouselView: View {
         guard count > 0, (0..<count).contains(index) else { return 0 }
         return index
     }
+
+    private func sessionAverageText(_ value: Double) -> String {
+        let format = String(localized: "session_average_db_format")
+        return String.localizedStringWithFormat(format, Int64(value.rounded()))
+    }
     
     var body: some View {
         VStack(spacing: 12) {
@@ -38,6 +47,17 @@ struct WaveformCarouselView: View {
                 Text(LocalizedStringKey(Self.visualizations[selectedVisualizationIndex]))
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
+
+                if isDbPeakSelected, let sessionAverageDb = audioManager.sessionAverageDb {
+                    Text(sessionAverageText(sessionAverageDb))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.88))
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.35))
+                        .cornerRadius(4)
+                }
 
                 Spacer()
                 

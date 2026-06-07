@@ -99,6 +99,7 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var dbPeakData: [DbPeakDataPoint] = []
     @Published var dbPeakValue: Double = 0.0
     @Published var dbPeakTime: Date = Date()
+    @Published var sessionAverageDb: Double? = nil
 
     // Calibration settings
     @Published var calibrationOffset: Double = 0.0
@@ -149,6 +150,8 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     private var sessionPeakDb: Double = 0.0
     private var sessionPeakTime: Date = Date()
     private var frozenPeakSnapshot: [DbPeakDataPoint]? = nil
+    private var sessionAveragePowerSum: Double = 0.0
+    private var sessionAverageSampleCount: Int = 0
     
     override init() {
         super.init()
@@ -479,6 +482,9 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         dbPeakData = []
         dbPeakValue = 0.0
         dbPeakTime = Date()
+        sessionAveragePowerSum = 0.0
+        sessionAverageSampleCount = 0
+        sessionAverageDb = nil
         
         let deactivation = DispatchWorkItem { [weak self] in
             guard let self, self.monitoringGeneration == generation, !self.isRecording else { return }
@@ -613,6 +619,30 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
         return min(130.0, max(0.0, value))
     }
 
+    static func linearPower(forDecibel decibel: Double) -> Double? {
+        guard decibel.isFinite else { return nil }
+        let power = pow(10.0, decibel / 10.0)
+        guard power.isFinite, power > 0 else { return nil }
+        return power
+    }
+
+    static func equivalentDecibelLevel(linearPowerSum: Double, sampleCount: Int) -> Double? {
+        guard sampleCount > 0, linearPowerSum.isFinite, linearPowerSum > 0 else { return nil }
+        let averagePower = linearPowerSum / Double(sampleCount)
+        guard averagePower.isFinite, averagePower > 0 else { return nil }
+        return 10.0 * log10(averagePower)
+    }
+
+    private func updateSessionAverage(with decibel: Double) {
+        guard let power = Self.linearPower(forDecibel: decibel) else { return }
+        sessionAveragePowerSum += power
+        sessionAverageSampleCount += 1
+        sessionAverageDb = Self.equivalentDecibelLevel(
+            linearPowerSum: sessionAveragePowerSum,
+            sampleCount: sessionAverageSampleCount
+        )
+    }
+
     private func updateDbHistory() {
         // Add new timestamped data point
         let currentTime = CACurrentMediaTime()
@@ -632,6 +662,7 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
             dbHistory.removeFirst()
         }
         dbHistory.append(decibelLevel)
+        updateSessionAverage(with: decibelLevel)
 
         // Cull old timestamped data points that are no longer visible
         cullInvisibleDataPoints(currentTime: currentTime)

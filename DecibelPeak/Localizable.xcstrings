@@ -736,6 +736,48 @@
         }
       }
     },
+    "session_average_db_format" : {
+      "comment" : "Compact dB Peak chart badge showing equivalent session average decibel level",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ø %lld dB"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avg. %lld dB"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media %lld dB"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moy. %lld dB"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平均 %lld dB"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Méd. %lld dB"
+          }
+        }
+      }
+    },
     "sound_level_monitor" : {
       "comment" : "Subtitle for the app",
       "extractionState" : "manual",

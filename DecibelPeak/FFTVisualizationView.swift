@@ -353,6 +353,7 @@ struct DbPeakView: View {
 
     private let visibleTimeWindow: CGFloat = 15.0  // 15 seconds visible at a time
     private let timeLabelHeight: CGFloat = 18  // reserved space below chart for time labels
+    private let sessionAverageBadgeReservedWidth: CGFloat = 96
 
     private static let peakTimeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -473,9 +474,23 @@ struct DbPeakView: View {
                             .background(colorForDb(audioManager.dbPeakValue).opacity(0.8))
                             .cornerRadius(4)
                             .position(
-                                x: min(max(peakX, 30), geometry.size.width - 30),
+                                x: min(max(peakX, 30), peakLabelMaxX(for: geometry.size.width)),
                                 y: 12
                             )
+                    }
+
+                    if let sessionAverageDb = audioManager.sessionAverageDb {
+                        Text(sessionAverageText(sessionAverageDb))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.88))
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.35))
+                            .cornerRadius(4)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                            .padding(.top, 2)
+                            .padding(.trailing, 2)
                     }
 
                     // Time labels below the chart (aligned to 5-second intervals)
@@ -541,6 +556,16 @@ struct DbPeakView: View {
         let normalizedDb = (db - minDb) / (maxDb - minDb)
         let clampedNormalized = max(0.0, min(1.0, normalizedDb))
         return height * (1.0 - CGFloat(clampedNormalized))
+    }
+
+    private func peakLabelMaxX(for width: CGFloat) -> CGFloat {
+        guard audioManager.sessionAverageDb != nil else { return width - 30 }
+        return max(30, width - sessionAverageBadgeReservedWidth)
+    }
+
+    private func sessionAverageText(_ value: Double) -> String {
+        let format = String(localized: "session_average_db_format")
+        return String.localizedStringWithFormat(format, Int64(value.rounded()))
     }
 
     private func colorForDb(_ db: Double) -> Color {

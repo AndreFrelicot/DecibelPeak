@@ -18,6 +18,19 @@ struct DecibelPeakTests {
         #expect(AudioManager.sanitizedDecibel(160.0) == 130.0)
     }
 
+    @Test func equivalentDecibelLevelUsesEnergyAverage() {
+        let powerSum = AudioManager.linearPower(forDecibel: 60.0)! + AudioManager.linearPower(forDecibel: 70.0)!
+        let average = AudioManager.equivalentDecibelLevel(linearPowerSum: powerSum, sampleCount: 2)!
+
+        #expect(abs(average - 67.4036) < 0.001)
+    }
+
+    @Test func equivalentDecibelLevelRejectsInvalidInputs() {
+        #expect(AudioManager.linearPower(forDecibel: .nan) == nil)
+        #expect(AudioManager.equivalentDecibelLevel(linearPowerSum: 0.0, sampleCount: 2) == nil)
+        #expect(AudioManager.equivalentDecibelLevel(linearPowerSum: 1.0, sampleCount: 0) == nil)
+    }
+
     @Test func fftAnalyzerReturnsZerosForShortInput() {
         let analyzer = FFTAnalyzer(fftSize: 8)
         let magnitudes = analyzer.analyze(samples: [0.1, 0.2])

@@ -1,15 +1,15 @@
 # DecibelPeak
 
 <p align="center">
-  <img src=".github/decibelpeak-icon.webp" alt="DecibelPeak Icon" width="200"/>
+  <img src=".github/decibelpeak-icon.webp" alt="DecibelPeak icon" width="200"/>
 </p>
 
 <p align="center">
-  <strong>Professional sound level monitoring for iOS</strong>
+  <strong>A fancy sound level monitor for iOS</strong>
 </p>
 
 <p align="center">
-  Real-time decibel measurements • Frequency spectrum analysis • Multiple visualization modes
+  Real-time decibel readings, frequency analysis, and several ways to look at the sound around you.
 </p>
 
 <p align="center">
@@ -20,228 +20,177 @@
 
 ---
 
-## 📱 About
+## About
 
-**DecibelPeak** is a sophisticated iOS application for monitoring and analyzing sound levels in real-time. Whether you're an audio professional, researcher, or just curious about your acoustic environment, DecibelPeak provides accurate decibel measurements with beautiful, intuitive visualizations.
+DecibelPeak measures sound levels with your iPhone's microphone and shows them in real time. It reads the current level on a circular gauge, tracks the loudest moment of the session, and offers several visualizations of the live audio. It's meant to be useful and good-looking rather than a calibrated measurement instrument.
 
-## 🎥 Demo Video
+## Demo video
 
 <p align="center">
   <a href=".github/DecibelPeak-886-1920-60fps.mov">
-    <img src=".github/decibelpeak-ss-01.png" width="250" alt="Watch Demo Video"/>
+    <img src=".github/decibelpeak-ss-01.png" width="250" alt="Watch the demo video"/>
   </a>
 </p>
 
 <p align="center">
-  <strong>👆 Click image above to download and watch the demo video (28MB, 60fps)</strong><br/>
-  <em>See DecibelPeak in action with real-time monitoring and multiple visualization modes</em>
+  Click the image to download and watch the demo (~30 MB, 60 fps).
 </p>
 
-## ✨ Features
+## Features
 
-### 🎯 Core Functionality
-- **Real-time Decibel Monitoring**: Accurate sound level measurements from 20 to 130 dB
-- **Color-Coded Levels**: Instant visual feedback with green (quiet), yellow (moderate), orange (loud), and red (dangerous) indicators
-- **Auto-Start**: Automatically begins monitoring when microphone permissions are granted
-- **Portrait & Landscape**: Optimized layouts for both orientations
+- **Real-time level monitoring** on a circular gauge spanning 20–130 dB over a 270° arc.
+- **Color-coded levels**: blue (below 40 dB), green (40–60), yellow (60–80), orange (80–100), red (100 and above).
+- **Calibration**: an adjustable offset of ±20 dB in 0.5 dB steps, with a snap-to-zero point. The setting is saved between launches.
+- **Session peak tracking**: the app remembers the loudest moment of the session.
+- **Session average**: an equivalent-level badge summarizing the session in a single number.
+- **Auto-start**: monitoring begins on its own once microphone access is granted.
+- **Portrait and landscape** layouts.
+- **Six languages**: English, French, German, Spanish, Japanese, and Brazilian Portuguese.
 
-### 📊 Six Visualization Modes
+### Visualizations
 
-1. **Waveform** - Classic oscilloscope view of audio signal
-2. **Spectrum** - Real-time amplitude spectrum display
-3. **FFT Bars** - Frequency analysis with vertical bar chart (64 frequency bands, 20 Hz - 20 kHz)
-4. **FFT Circle** - Circular frequency visualization
-5. **Waterfall** - Spectrogram showing frequency changes over time
-6. **dB Curve** - Historical decibel level tracking
+The visualization area holds seven views. It cycles through them on its own while monitoring, and you can swipe or tap to move through them yourself.
 
-<p align="center">
-  <em>Auto-scrolls through visualizations every 3 seconds, or tap to manually cycle</em>
-</p>
+1. **Waveform** — oscilloscope-style view of the audio signal.
+2. **Spectrum** — amplitude spectrum of the current sound.
+3. **FFT Bars** — frequency content as vertical bars across the audible range.
+4. **FFT Circle** — the same frequency content arranged in a circle.
+5. **Waterfall** — a spectrogram showing how frequencies change over time.
+6. **dB Curve** — recent decibel levels over time.
+7. **dB Peak** — a 60-second window centered on the session's loudest moment, with a dashed marker at the exact second it happened. Scroll horizontally to move through the window.
 
-### 🎨 User Interface
-- **Circular Gauge**: Beautiful analog-style meter with 270° arc
-- **Sound Level Indicators**: Three-tier visual feedback system (Quiet/Moderate/Loud)
-- **Contextual Labels**: Dynamic descriptions based on current sound level
-- **Dark Theme**: Elegant gradient design optimized for any lighting condition
-- **Responsive Design**: Perfectly adapted layouts for all iPhone models
-
-## 🖼️ Screenshots
+## Screenshots
 
 <p align="center">
-  <img src=".github/decibelpeak-ss-01.png" width="200" alt="Main View"/>
-  <img src=".github/decibelpeak-ss-02.png" width="200" alt="Circular Gauge"/>
-  <img src=".github/decibelpeak-ss-03.png" width="200" alt="FFT Visualization"/>
-  <img src=".github/decibelpeak-ss-04.png" width="200" alt="Spectrum View"/>
+  <img src=".github/decibelpeak-ss-01.png" width="200" alt="Main view"/>
+  <img src=".github/decibelpeak-ss-02.png" width="200" alt="Circular gauge"/>
+  <img src=".github/decibelpeak-ss-03.png" width="200" alt="FFT visualization"/>
+  <img src=".github/decibelpeak-ss-04.png" width="200" alt="Spectrum view"/>
 </p>
 
 <p align="center">
-  <img src=".github/decibelpeak-ss-05.png" width="200" alt="Waterfall Display"/>
+  <img src=".github/decibelpeak-ss-05.png" width="200" alt="Waterfall display"/>
 </p>
 
-## 🔧 Technical Details
+## Technical details
 
-### Audio Processing
-- **Sample Rate**: 44.1 kHz
-- **Buffer Size**: 1024 samples
-- **FFT Analysis**: Using Apple's Accelerate framework for optimized performance
-- **Window Function**: Hanning window for frequency analysis
-- **Update Rate**: 30 FPS for real-time responsiveness
-- **RMS-based Calibration**: Accurate decibel calculations with smoothing
+### Audio processing
+
+- Sample rate: 44.1 kHz
+- Buffer size: 1024 samples
+- FFT via Apple's Accelerate framework (vDSP), with a Hann window
+- Level computed from RMS, then converted to decibels with smoothing and an optional calibration offset
+- Session average computed as an equivalent continuous level over the session
+
+### Rendering
+
+Updates are driven by `CADisplayLink` and synced to the display refresh. The level and waveform redraw at the screen's refresh rate; the dB history is collected at 10 FPS to keep scrolling steady, and the waterfall updates at 15 FPS.
 
 ### Architecture
-- **SwiftUI**: Modern declarative UI framework
-- **AVFoundation**: Professional-grade audio capture
-- **Accelerate**: Hardware-accelerated FFT computations
-- **ObservableObject Pattern**: Reactive data flow
-- **Timer-based Updates**: Separate timers for display and history tracking
 
-### Code Highlights
-```swift
-// Real-time audio processing with FFT analysis
-private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-    // RMS calculation for decibel measurement
-    let rms = sqrt(channelDataArray.map { $0 * $0 }.reduce(0, +) / Float(channelDataArray.count))
-    let avgPower = 20 * log10(max(0.00001, rms))
-    let calibratedDb = avgPower + 100
+- SwiftUI for the interface
+- AVFoundation for audio capture
+- Accelerate for the FFT
+- An `ObservableObject` audio manager driving the views
 
-    // FFT analysis for frequency visualization
-    let fftMagnitudes = fftAnalyzer.analyze(samples: channelDataArray)
-    let bands = fftAnalyzer.getFrequencyBands(magnitudes: fftMagnitudes, bandCount: 64)
-}
-```
+## Getting started
 
-## 🚀 Getting Started
-
-### Download from App Store
+### From the App Store
 
 The easiest way to get DecibelPeak is from the App Store:
 
-**[📲 Download on the App Store](https://apps.apple.com/us/app/decibelpeak/id6752702602)**
+**[Download on the App Store](https://apps.apple.com/us/app/decibelpeak/id6752702602)**
 
-**Requirements:**
+Requirements:
+
 - iOS 17.0 or later
-- Microphone access permission
+- Microphone access
 
-### Build from Source (For Developers)
+### Build from source
 
-**Requirements:**
+Requirements:
+
 - iOS 17.0 or later
 - Xcode 16.4 or later
-- Swift 5.0 or later
-- Apple Developer Account (for device deployment)
+- Swift 5.0
+- An Apple Developer account for running on a device
 
-**Installation:**
+Steps:
 
 1. Clone the repository:
-```bash
-git clone https://github.com/AndreFrelicot/DecibelPeak.git
-cd DecibelPeak
-```
+   ```bash
+   git clone https://github.com/AndreFrelicot/DecibelPeak.git
+   cd DecibelPeak
+   ```
+2. Open the project:
+   ```bash
+   open DecibelPeak.xcodeproj
+   ```
+3. Select your development team in the project settings.
+4. Build and run on a device or the simulator.
 
-2. Open the project in Xcode:
-```bash
-open DecibelPeak.xcodeproj
-```
+On first launch the app asks for microphone access and starts monitoring once it's granted.
 
-3. Select your development team in the project settings
+## Usage
 
-4. Build and run on your device or simulator
+1. Grant microphone access; monitoring starts automatically.
+2. Read the current level on the circular gauge.
+3. Swipe or tap the visualization area to move between views.
+4. Watch the Quiet / Moderate / Loud indicator at the bottom.
+5. Use the calibration control to offset readings if needed.
+6. Tap stop to pause.
 
-### First Launch
-
-On first launch, DecibelPeak will request microphone access. Grant permission to enable sound monitoring. The app will automatically start monitoring once permission is granted.
-
-## 📖 Usage
-
-1. **Start Monitoring**: Tap the microphone button or the app will auto-start with permissions
-2. **View Measurements**: Watch the circular gauge for real-time decibel readings
-3. **Explore Visualizations**: Tap the visualization area to cycle through different views
-4. **Check Levels**: Observe the three-tier indicator (Quiet/Moderate/Loud) at the bottom
-5. **Stop Monitoring**: Tap the stop button to pause measurements
-
-### Sound Level Reference
+### Sound level reference
 
 | Range | Color | Description | Examples |
 |-------|-------|-------------|----------|
-| 20-60 dB | 🟢 Green | Quiet | Library, whisper, normal conversation |
-| 60-85 dB | 🟡 Yellow | Moderate | Busy traffic, vacuum cleaner |
-| 85-100 dB | 🟠 Orange | Loud | Lawn mower, motorcycle |
-| 100+ dB | 🔴 Red | Dangerous | Concert, chainsaw, thunder |
+| Below 40 dB | Blue | Very quiet | Quiet room, soft breathing |
+| 40–60 dB | Green | Quiet | Library, normal conversation |
+| 60–80 dB | Yellow | Moderate | Busy traffic, vacuum cleaner |
+| 80–100 dB | Orange | Loud | Lawn mower, motorcycle |
+| 100 dB and above | Red | Dangerous | Concert, chainsaw, thunder |
 
-> ⚠️ **Note**: Prolonged exposure to sounds above 85 dB can cause hearing damage.
+Prolonged exposure to sounds above 85 dB can damage hearing.
 
-## 🏗️ Project Structure
+## Project structure
 
 ```
 DecibelPeak/
 ├── DecibelPeak/
 │   ├── DecibelPeakApp.swift          # App entry point
-│   ├── ContentView.swift              # Main UI with responsive layouts
-│   ├── AudioManager.swift             # Audio capture and processing
-│   ├── FFTAnalyzer.swift              # Frequency analysis engine
-│   ├── CircularGaugeView.swift        # Analog gauge component
-│   ├── WaveformCarouselView.swift     # Visualization carousel
-│   ├── WaveformView.swift             # Waveform display
-│   ├── FFTVisualizationView.swift     # FFT visualization components
-│   ├── Localizable.xcstrings          # Localized strings
-│   └── Assets.xcassets/               # App icons and colors
-├── DecibelPeakTests/                  # Unit tests
-└── DecibelPeakUITests/                # UI tests
+│   ├── ContentView.swift             # Main UI with responsive layouts
+│   ├── AudioManager.swift            # Audio capture and processing
+│   ├── FFTAnalyzer.swift             # Frequency analysis
+│   ├── CircularGaugeView.swift       # Circular gauge
+│   ├── WaveformCarouselView.swift    # Visualization carousel
+│   ├── WaveformView.swift            # Waveform display
+│   ├── FFTVisualizationView.swift    # FFT-based visualizations
+│   ├── Localizable.xcstrings         # Localized strings
+│   └── Assets.xcassets/              # Icons and colors
+├── DecibelPeakTests/                 # Unit tests
+└── DecibelPeakUITests/               # UI tests
 ```
 
-## 🌍 Localization
+## Localization
 
-DecibelPeak supports multiple languages through `Localizable.xcstrings`. To add a new language:
+Strings live in `Localizable.xcstrings`. To add a language, open that file in Xcode, add the language, and translate the entries.
 
-1. Open `Localizable.xcstrings` in Xcode
-2. Click the "+" button to add a language
-3. Translate the strings for your locale
+## Contributing
 
-## 🤝 Contributing
+Contributions are welcome. Useful ones include bug reports, feature ideas, new translations, documentation fixes, and pull requests.
 
-Contributions are welcome! Here are some ways you can contribute:
+1. Fork the repository.
+2. Create a branch for your change.
+3. Commit your work.
+4. Open a pull request.
 
-- 🐛 Report bugs and issues
-- 💡 Suggest new features or visualizations
-- 🌍 Add translations for new languages
-- 📝 Improve documentation
-- 🔧 Submit pull requests
-
-### Development Guidelines
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is available for personal and educational use. For commercial use, please contact the author.
-
-## 👤 Author
+## Author
 
 **André Frélicot**
 
 - GitHub: [@AndreFrelicot](https://github.com/AndreFrelicot)
 - Bundle ID: `dev.andrefrelicot.decibelpeak`
 
-## 🙏 Acknowledgments
+## License
 
-- Built with SwiftUI and AVFoundation
-- FFT implementation using Apple's Accelerate framework
-- Inspired by professional audio measurement tools
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-
-1. Check the [Issues](https://github.com/AndreFrelicot/DecibelPeak/issues) page
-2. Create a new issue with a detailed description
-3. Include your iOS version and device model
-
----
-
-<p align="center">
-  Made with ❤️ for the iOS audio community
-</p>
+Released under the MIT License. See [LICENSE](LICENSE) for details.
